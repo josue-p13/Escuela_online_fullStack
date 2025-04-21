@@ -12,7 +12,7 @@ defineProps({
   <div>
     <!-- Mostrar nombres y apellidos del objeto user -->
     <h1>Bienvenido, {{ user.nombres }} {{ user.apellidos }}!</h1>
-    <p>Este es tu panel de control. Tu correo es: {{ user.email }}</p>
+    <p>Este es tu panel de control. Tu correo es: {{ user.email }}</p>  
   </div>
 </template>
 

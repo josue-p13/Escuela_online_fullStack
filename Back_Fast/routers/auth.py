@@ -1,19 +1,17 @@
-\
-# filepath: c:\\Users\\josue\\Desktop\\Escuela_online\\Back_Fast\\routers\\auth.py
-from fastapi import APIRouter, HTTPException, status, Form
+from fastapi import APIRouter, HTTPException, status, Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import EmailStr
 from typing import Annotated
-
-# Importar lógica de usuario (cambiado a import absoluto)
-from user_logic import create_user, authenticate_user
-# Importar modelo Pydantic para login desde models.py
-from models import UserLogin # Cambiado de 'principal' a 'models'
+from user_logic import prepare_user_registration, confirm_user_email, authenticate_user
+from models import UserLogin
+from email_sender import send_confirmation_email
 
 router = APIRouter()
 
-# --- Endpoint de Registro ---
-@router.post("/register", status_code=status.HTTP_201_CREATED, tags=["Authentication"])
+# --- Endpoint de Registro (Modificado) ---
+@router.post("/register", status_code=status.HTTP_202_ACCEPTED, tags=["Authentication"])
 async def register_user_endpoint(
+    request: Request,
     nombres: Annotated[str, Form()],
     apellidos: Annotated[str, Form()],
     email: Annotated[EmailStr, Form()],
@@ -21,53 +19,91 @@ async def register_user_endpoint(
     confirm_password: Annotated[str, Form()],
     telefono: Annotated[str | None, Form()] = None
 ):
-    # Validación básica (ej. contraseñas coinciden)
     if password != confirm_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Las contraseñas no coinciden"
         )
 
-    # Llamar a la función de lógica de usuario para crear el usuario
     try:
-        user_id = create_user(
+        # Preparar registro (guarda temporalmente, devuelve token)
+        user_info = prepare_user_registration(
             nombres=nombres,
             apellidos=apellidos,
             email=email,
             password=password,
             telefono=telefono
         )
-        return {"message": "Usuario registrado exitosamente"}
+
+        # Construir URL de confirmación completa (corregida)
+        # Cambiamos cómo se construye la URL para asegurar el formato correcto
+        base_url = str(request.base_url).rstrip('/')
+        confirmation_url = f"{base_url}/auth/confirm/{user_info['token']}"
+        
+        print(f"URL de confirmación generada: {confirmation_url}")
+
+        # Enviar correo de confirmación
+        email_sent = send_confirmation_email(
+            to_email=user_info['email'],
+            confirmation_url=confirmation_url
+        )
+
+        if not email_sent:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Se preparó el registro, pero no se pudo enviar el correo de confirmación."
+            )
+
+        return {"message": "Registro casi completo. Revisa tu correo electrónico para confirmar tu cuenta."}
+
     except HTTPException as http_exc:
         raise http_exc
     except Exception as e:
         print(f"Error inesperado durante el registro: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ocurrió un error inesperado en el servidor: {e}"
+            detail=f"Ocurrió un error inesperado en el servidor durante el registro."
         )
+
+# --- Endpoint de Confirmación (Corregido) ---
+@router.get("/confirm/{token}", tags=["Authentication"])
+async def confirm_email_endpoint(token: str):
+    print(f"Solicitud de confirmación recibida con token: {token}")
+    confirmed = confirm_user_email(token)
+
+    if confirmed:
+        frontend_login_url = "http://localhost:5173/login?confirmed=true"
+        return RedirectResponse(url=frontend_login_url)
+    else:
+        html_content = """
+        <html>
+            <head><title>Error de Confirmación</title></head>
+            <body>
+                <h1>Error en la Confirmación</h1>
+                <p>El enlace de confirmación es inválido, ha expirado o ya ha sido utilizado.</p>
+                <p>Por favor, intenta registrarte de nuevo o contacta con soporte si el problema persiste.</p>
+            </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content, status_code=status.HTTP_400_BAD_REQUEST)
 
 # --- Endpoint de Login ---
 @router.post("/login", tags=["Authentication"])
 async def login_user_endpoint(user_login: UserLogin):
-    # Llamar a la función de lógica de usuario para autenticar
     authenticated_user = authenticate_user(email=user_login.email, password=user_login.password)
 
     if not authenticated_user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciales incorrectas",
+            detail="Credenciales incorrectas o email no confirmado.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Devolver más datos del usuario (nombre, apellido, email)
-    # Asegúrate de que estos campos existen en tu documento de MongoDB
     return {
         "message": "Login exitoso",
         "user": {
             "email": authenticated_user["email"],
-            "nombres": authenticated_user.get("nombres", ""), # Usar .get con valor por defecto
-            "apellidos": authenticated_user.get("apellidos", "") # Usar .get con valor por defecto
+            "nombres": authenticated_user.get("nombres", ""),
+            "apellidos": authenticated_user.get("apellidos", "")
         }
-        # Aquí normalmente generarías y devolverías un token JWT
     }

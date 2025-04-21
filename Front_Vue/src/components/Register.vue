@@ -1,5 +1,6 @@
 <script>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { useRoute } from 'vue-router'; // Si usas vue-router
 
 export default {
     name: 'Register',
@@ -13,6 +14,24 @@ export default {
         const confirmPassword = ref('');
         const errorMessage = ref('');
         const successMessage = ref(''); 
+        const confirmationMessage = ref('');
+        // const route = useRoute(); // Descomenta si usas vue-router
+
+        onMounted(() => {
+            // Si NO usas vue-router, puedes acceder a window.location.search
+            const queryParams = new URLSearchParams(window.location.search);
+            if (queryParams.get('confirmed') === 'true') {
+                confirmationMessage.value = '¡Cuenta confirmada exitosamente! Ya puedes iniciar sesión.';
+                // Opcional: Limpiar el parámetro de la URL para que no se muestre si recarga
+                // window.history.replaceState({}, document.title, window.location.pathname);
+            }
+
+            // Si usas vue-router
+            // if (route.query.confirmed === 'true') {
+            //   confirmationMessage.value = '¡Cuenta confirmada exitosamente! Ya puedes iniciar sesión.';
+            //   // Opcional: Limpiar query param
+            // }
+        });
 
         // Método para manejar el envío del formulario
         const handleSubmit = async () => {
@@ -71,6 +90,7 @@ export default {
             confirmPassword,
             errorMessage,
             successMessage,
+            confirmationMessage,
             handleSubmit,
         };
     }
@@ -83,6 +103,7 @@ export default {
         <!-- Mostrar mensajes de error o éxito -->
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
         <p v-if="successMessage" class="success-message">{{ successMessage }}</p>
+        <p v-if="confirmationMessage" class="success-message">{{ confirmationMessage }}</p>
 
         <form @submit.prevent="handleSubmit"> <!-- Usar el método handleSubmit -->
         <!-- Usar v-model para enlazar inputs con las variables reactivas -->
