@@ -2,7 +2,7 @@ import resend
 import os
 
 # --- Configuración de Resend ---
-RESEND_API_KEY = "re_Hsg6A2Hq_HPqdbLFGzPPzyW6uEGdur4RA"
+RESEND_API_KEY = ""
 SENDER_EMAIL = "CrackSchool@hotmail.com"
 # Configurar API key
 resend.api_key = RESEND_API_KEY
